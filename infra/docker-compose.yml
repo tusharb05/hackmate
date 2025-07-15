@@ -1,0 +1,29 @@
+version: "3.8"
+
+name: hackmate_services
+
+services:
+  user-db:
+    image: postgres
+    environment:
+      POSTGRES_DB: ${USER_DB}
+      POSTGRES_USER: ${USER_DB_USER}
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  user-service:
+    build: ../user-service/
+    volumes:
+      - ../user-service/user_service:/usr/local/app
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: ${USER_DB_URL}
+    depends_on:
+      - user-db
+
+volumes:
+  pgdata:
