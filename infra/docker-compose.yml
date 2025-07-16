@@ -17,11 +17,17 @@ services:
   user-service:
     build: ../user-service/
     volumes:
-      - ../user-service/user_service:/usr/local/app
+      - ../user-service:/usr/local/app
     ports:
       - "8001:8000"
     environment:
       DATABASE_URL: ${USER_DB_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME}
+      AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      USER_SERVICE_SECRET_KEY: ${USER_SERVICE_SECRET_KEY}
     depends_on:
       - user-db
 

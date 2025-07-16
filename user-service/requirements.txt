@@ -5,3 +5,5 @@ django-storages
 boto3
 gunicorn
 dj_database_url
+PyJWT
+Pillow
