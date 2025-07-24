@@ -7,7 +7,7 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
 def generate_jwt(user):
     payload = {
-        'email': user.email,
+        'user_id': str(user.id),  # or `user.id` directly if it's int
         'exp': datetime.utcnow() + timedelta(hours=24),
         'iat': datetime.utcnow()
     }

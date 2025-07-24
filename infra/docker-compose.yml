@@ -2,6 +2,20 @@ version: "3.8"
 
 name: hackmate_services
 
+# Define a reusable environment configuration for team services
+x-team-service-env: &team-service-env
+  TEAM_DB: ${TEAM_DB}
+  TEAM_DB_USER: ${TEAM_DB_USER}
+  TEAM_DB_PASSWORD: ${TEAM_DB_PASSWORD}
+  TEAM_DB_HOST: team-db
+  TEAM_DB_PORT: ${TEAM_DB_PORT:-5432}
+  TEAM_SERVICE_SECRET_KEY: ${TEAM_SERVICE_SECRET_KEY}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+  # Add the directory containing manage.py to the Python path.
+  # This makes imports like "from teams.models" work correctly.
+  PYTHONPATH: ./team_service
+
 services:
   user-db:
     image: postgres
@@ -9,10 +23,41 @@ services:
       POSTGRES_DB: ${USER_DB}
       POSTGRES_USER: ${USER_DB_USER}
       POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  team-db:
+    image: postgres
+    environment:
+      POSTGRES_DB: ${TEAM_DB}
+      POSTGRES_USER: ${TEAM_DB_USER}
+      POSTGRES_PASSWORD: ${TEAM_DB_PASSWORD}
+    volumes:
+      - team_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   user-service:
     build: ../user-service/
@@ -29,7 +74,127 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       USER_SERVICE_SECRET_KEY: ${USER_SERVICE_SECRET_KEY}
     depends_on:
-      - user-db
+      user-db:
+        condition: service_healthy
+
+  team-service:
+    build: ../team-service/
+    volumes:
+      - ../team-service:/usr/local/app
+    ports:
+      - "8002:8000"
+    environment:
+      # Use the shared environment
+      <<: *team-service-env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    depends_on:
+      team-db:
+        condition: service_healthy
+
+  team-consumer:
+    build: ../team-service/
+    command: python team_service/consumers/user_sync.py
+    restart: on-failure
+    environment:
+      # Use the shared environment here as well
+      <<: *team-service-env
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      team-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  team-consumer-skill:
+    build: ../team-service
+    command: python team_service/consumers/skill_sync.py
+    restart: on-failure
+    environment:
+      <<: *team-service-env
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      team-service:
+        condition: service_started
+      rabbitmq: 
+        condition: service_healthy
 
 volumes:
   pgdata:
+  team_pgdata:
+
+# version: "3.8"
+
+# name: hackmate_services
+
+# services:
+#   user-db:
+#     image: postgres
+#     environment:
+#       POSTGRES_DB: ${USER_DB}
+#       POSTGRES_USER: ${USER_DB_USER}
+#       POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
+#     # ports:
+#     #   - "5432:5432"
+#     volumes:
+#       - pgdata:/var/lib/postgresql/data
+
+#   team-db:
+#     image: postgres
+#     environment:
+#       POSTGRES_DB: ${TEAM_DB}
+#       POSTGRES_USER: ${TEAM_DB_USER}
+#       POSTGRES_PASSWORD: ${TEAM_DB_PASSWORD}
+#     volumes:
+#       - team_pgdata:/var/lib/postgresql/data
+
+#   user-service:
+#     build: ../user-service/
+#     volumes:
+#       - ../user-service:/usr/local/app
+#     ports:
+#       - "8001:8000"
+#     environment:
+#       DATABASE_URL: ${USER_DB_URL}
+#       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+#       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+#       AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME}
+#       AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME}
+#       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+#       USER_SERVICE_SECRET_KEY: ${USER_SERVICE_SECRET_KEY}
+#     depends_on:
+#       - user-db
+  
+#   team-service:
+#     build: ../team-service/
+#     volumes:
+#       - ../team-service:/usr/local/app
+#     ports:
+#       - "8002:8000"
+#     environment:
+#       TEAM_DB: ${TEAM_DB}
+#       TEAM_DB_USER: ${TEAM_DB_USER}
+#       TEAM_DB_PASSWORD: ${TEAM_DB_PASSWORD}
+#       TEAM_DB_HOST: ${TEAM_DB_HOST}
+#       TEAM_DB_PORT: ${TEAM_DB_PORT}
+#       TEAM_SERVICE_SECRET_KEY: ${TEAM_SERVICE_SECRET_KEY}
+#       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+#     depends_on:
+#       - team-db
+
+#   rabbitmq:
+#     image: rabbitmq:3-management
+#     ports:
+#       - "5672:5672"     # AMQP
+#       - "15672:15672"   # Management UI
+#     environment:
+#       RABBITMQ_DEFAULT_USER: guest
+#       RABBITMQ_DEFAULT_PASS: guest
+
+#   team-consumer:
+#     build: .
+#     command: python team_service/consumers/user_sync.py
+#     depends_on: [team-service, rabbitmq]
+
+# volumes:
+#   pgdata:
+#   team_pgdata:

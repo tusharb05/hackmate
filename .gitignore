@@ -5,5 +5,7 @@ user-service/.env
 **/.env
 
 # Python
-__pycache__/
+**/__pycache__/
 *.pyc
+
+**/migrations/
