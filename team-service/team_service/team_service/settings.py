@@ -26,7 +26,7 @@ SECRET_KEY = os.getenv('TEAM_SERVICE_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['0.0.0.0', 'localhost']
+ALLOWED_HOSTS = ['0.0.0.0', 'localhost', 'team-service']
 
 
 ##### RABBITMQ VARS
@@ -39,6 +39,9 @@ SKILL_EVENTS_EXCHANGE = "skill.events"
 SKILL_CREATED_ROUTING_KEY = "skill.created"
 TEAM_SKILL_QUEUE = "team-service.skill-created"
 
+NOTIFICATION_EXCHANGE = "notification_exchange"
+NOTIFICATION_ROUTING_KEY = "notification.join_request"
+NOTIFICATION_QUEUE = "notification_queue"
 #####
 
 
@@ -52,9 +55,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'teams',
+    'corsheaders'
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -63,6 +68,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'team_service.urls'
 

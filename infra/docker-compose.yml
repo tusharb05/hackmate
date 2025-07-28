@@ -117,10 +117,70 @@ services:
         condition: service_started
       rabbitmq: 
         condition: service_healthy
+  
+  notification-db:
+    image: postgres
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_DB}
+      POSTGRES_USER: ${NOTIFICATION_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+    volumes:
+      - notification_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  notification-service:
+    build: ../notification-service/
+    volumes:
+      - ../notification-service:/usr/local/app
+    ports:
+      - "8003:8000"
+    environment:
+      NOTIFICATION_DB: ${NOTIFICATION_DB}
+      NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      NOTIFICATION_DB_HOST: notification-db
+      NOTIFICATION_DB_PORT: ${NOTIFICATION_DB_PORT:-5432}
+      # JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      NOTIFICATION_SERVICE_SECRET_KEY: ${NOTIFICATION_SERVICE_SECRET_KEY}
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      PYTHONPATH: ./notification_service
+      RUN_MIGRATIONS: "true"
+    depends_on:
+      notification-db:
+        condition: service_healthy
+
+  notification-consumer:
+    build: ../notification-service/
+    # command: python notification_service/notification_service/rabbitmq/consumer.py
+    # command: ls -R 
+    command: python notification_service/notification_service/rabbitmq/consumer_notification.py
+    restart: on-failure
+    environment:
+      NOTIFICATION_DB: ${NOTIFICATION_DB}
+      NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      NOTIFICATION_DB_HOST: notification-db
+      NOTIFICATION_DB_PORT: ${NOTIFICATION_DB_PORT:-5432}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      NOTIFICATION_SERVICE_SECRET_KEY: ${NOTIFICATION_SERVICE_SECRET_KEY}
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      PYTHONPATH: ./notification_service
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      notification-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
 
 volumes:
   pgdata:
   team_pgdata:
+  notification_pgdata:
 
 # version: "3.8"
 

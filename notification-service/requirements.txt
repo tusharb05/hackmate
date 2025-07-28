@@ -1,11 +1,7 @@
 Django>=4.2
 djangorestframework
 psycopg2-binary
-django-storages
-boto3
-gunicorn
-dj_database_url
-PyJWT
-Pillow
+requests
 pika
+python-dotenv
 django-cors-headers

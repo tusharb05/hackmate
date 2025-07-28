@@ -8,6 +8,7 @@ import jwt
 import os
 from .rabbitmq.sender_users import publish_user_created
 from .rabbitmq.sender_skill_created import publish_skill_created_event
+from .serializers import UserDetailSerializer
 
 class LoginView(APIView):
     def post(self, request):
@@ -17,8 +18,17 @@ class LoginView(APIView):
 
         if user:
             token = generate_jwt(user)
-            return Response({"token": token})
+            return Response({
+                "token": token,
+                "user": {
+                    "id": str(user.id),
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "profile_image": request.build_absolute_uri(user.profile_image.url) if user.profile_image else None
+                }
+            })
         return Response({"error": "Invalid credentials"}, status=401)
+
 
 
 class RegisterView(APIView):
@@ -27,14 +37,9 @@ class RegisterView(APIView):
         full_name = request.data.get("full_name")
         password = request.data.get("password")
 
-        # Get list of skill names
         skills_names = request.POST.getlist("skills")
-        print(request.POST)
-
-        # Get uploaded profile image (optional)
         profile_image_file = request.FILES.get("profile_image")
 
-        # Check if user already exists
         if CustomUser.objects.filter(email=email).exists():
             return Response({"error": "Email already registered."}, status=400)
 
@@ -42,30 +47,30 @@ class RegisterView(APIView):
         for skill_name in skills_names:
             skill_name_cleaned = skill_name.strip()
             skill_obj, created = Skill.objects.get_or_create(skill=skill_name_cleaned)
-            
-            # If skill is newly created, publish event
             if created:
                 publish_skill_created_event(skill_obj)
-            
             valid_skills.append(skill_obj)
 
-        # Create user
         user = CustomUser.objects.create_user(
             email=email,
             full_name=full_name,
             password=password,
             profile_image=profile_image_file
         )
-
-        # Assign skills
         user.skills.set(valid_skills)
-
-        # Publish user.created (optional if you're syncing users too)
         publish_user_created(user)
 
-        # Generate JWT token
         token = generate_jwt(user)
-        return Response({"token": token}, status=status.HTTP_201_CREATED)
+        return Response({
+            "token": token,
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "profile_image": request.build_absolute_uri(user.profile_image.url) if user.profile_image else None
+            }
+        }, status=status.HTTP_201_CREATED)
+
 
 
 # class RegisterView(APIView):
@@ -139,3 +144,23 @@ class SyncAndReturnSkillsView(APIView):
             result.append({'id': s.id, 'skill': s.skill})
 
         return Response({'skills': result}, status=status.HTTP_200_OK)
+
+
+class UserBatchDetailView(APIView):
+    """
+    GET /api/users/details/?ids=2,4,6
+    Returns [{"id":2, "full_name":..., ...}, ...]
+    """
+    def get(self, request):
+        ids_param = request.query_params.get("ids", "")
+        try:
+            ids = [int(i) for i in ids_param.split(",") if i.strip()]
+        except ValueError:
+            return Response(
+                {"detail": "Invalid ids parameter; must be comma‑separated ints."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        users = CustomUser.objects.filter(id__in=ids)
+        serializer = UserDetailSerializer(users, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)

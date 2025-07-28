@@ -72,14 +72,56 @@ class CreateTeamApplicationView(APIView):
             "skills": skill_data # Return the full skill data from user-service
         }, status=201)
 
+
+
 class ListTeamApplicationsView(APIView):
     def get(self, request):
         try:
-            team_apps = TeamApplication.objects.all().order_by('-created_at')
-            serializer = TeamApplicationListSerializer(team_apps, many=True)
-            return Response(serializer.data, status=200)
-        except Exception as e:
-            return Response({"error": "Failed to fetch team applications", "details": str(e)}, status=500)
+            # Step 1: Extract and verify JWT token
+            token = request.headers.get("Authorization", "").split(" ")[1]
+            user_id = verify_user(token)  # This should return the user_id
+        except IndexError:
+            user_id = None  # No token means unauthenticated
+        except AuthenticationFailed:
+            user_id = None  # Invalid token means unauthenticated
+
+        # Step 2: Fetch all team applications
+        team_apps = TeamApplication.objects.all().order_by("-created_at")
+
+        # Step 3: Prepare maps to avoid N+1 queries
+        user_ids = set(app.leader_user_id for app in team_apps)
+        skill_ids = set(skill_id for app in team_apps for skill_id in app.skills)
+
+        user_map = {
+            user.id: user for user in CustomUser.objects.filter(id__in=user_ids)
+        }
+        skill_map = {
+            skill.id: skill.skill for skill in Skill.objects.filter(id__in=skill_ids)
+        }
+
+        # Step 4: If user is logged in, find all pending join requests made by them
+        user_join_requests_map = set()
+        if user_id:
+            pending_requests = TeamJoinRequest.objects.filter(
+                user_id=user_id, status="pending"
+            ).values_list("team_application_id", flat=True)
+            user_join_requests_map = set(pending_requests)
+
+        # Step 5: Serialize with custom context
+        serializer = TeamApplicationListSerializer(
+            team_apps,
+            many=True,
+            context={
+                "user_map": user_map,
+                "skill_map": skill_map,
+                "current_user_id": user_id,
+                "user_join_requests_map": user_join_requests_map,
+            },
+        )
+
+        return Response(serializer.data, status=200)
+    
+
 
 class CreateTeamJoinRequestView(APIView):
     def post(self, request):
@@ -130,30 +172,67 @@ class CreateTeamJoinRequestView(APIView):
         except Exception as e:
             return Response({"error": "Could not create join request", "details": str(e)}, status=500)
 
+
+
 class ListTeamJoinRequestsView(APIView):
     def get(self, request, team_id):
-        # Step 1: Validate token and get user_id
+        # — your existing auth + leader check —
+        auth_header = request.headers.get("Authorization", "")
         try:
-            token = request.headers.get('Authorization', '').split(' ')[1]
+            token = auth_header.split()[1]
             user_id = verify_user(token)
-        except IndexError:
-            return Response({"error": "Authorization header is missing or invalid"}, status=401)
-        except AuthenticationFailed as e:
-            return Response({"error": str(e)}, status=401)
+        except Exception:
+            return Response({"error": "Invalid or missing token"}, status=401)
 
-        # Step 2: Validate the team application and leader
         try:
             team_app = TeamApplication.objects.get(id=team_id)
         except TeamApplication.DoesNotExist:
-            return Response({"error": "Team application not found"}, status=404)
+            return Response({"error": "Team not found"}, status=404)
 
         if int(team_app.leader_user_id) != int(user_id):
-            return Response({"error": "Only the team leader can view join requests"}, status=403)
+            return Response({"error": "Only leader can view requests"}, status=403)
 
-        # Step 3: Fetch all join requests for this team
-        join_requests = TeamJoinRequest.objects.filter(team_application=team_app).order_by('-created_at')
-        serializer = TeamJoinRequestSerializer(join_requests, many=True)
-        return Response(serializer.data, status=200)
+        # Fetch join requests
+        join_requests = list(
+            TeamJoinRequest.objects
+                .filter(team_application=team_app)
+                .order_by("-created_at")
+        )
+
+        # 1️⃣ Collect all user_ids, dedupe
+        user_ids = list({jr.user_id for jr in join_requests})
+        if user_ids:
+            # 2️⃣ Batch‑fetch from User Service
+            try:
+                resp = requests.get(
+                    "http://user-service:8000/api/users/details/",
+                    params={"ids": ",".join(map(str, user_ids))},
+                    timeout=2
+                )
+                resp.raise_for_status()
+                users = resp.json()
+            except requests.RequestException as exc:
+                return Response(
+                    {"error": "Failed to fetch user details", "details": str(exc)},
+                    status=502
+                )
+            # build a map: user_id → user‑object
+            user_map = {u["id"]: u for u in users}
+        else:
+            user_map = {}
+
+        # 3️⃣ Serialize and merge
+        output = []
+        for jr in join_requests:
+            jr_data = TeamJoinRequestSerializer(jr).data
+            jr_data["user_details"] = user_map.get(jr.user_id, None)
+            output.append(jr_data)
+
+        return Response(output, status=200)
+
+
+
+from team_service.producers.send_notification import publish_notification_event
 
 class UpdateJoinRequestStatusView(APIView):
     def patch(self, request, request_id):
@@ -194,8 +273,40 @@ class UpdateJoinRequestStatusView(APIView):
                 team_app.save()
 
             serializer.save()
+
+            try:
+                new_member = CustomUser.objects.get(id=join_request.user_id)
+            except CustomUser.DoesNotExist:
+                new_member_name = "A new member"
+            else:
+                new_member_name = new_member.full_name
+
+
+            for member_id in team_app.member_user_ids:
+                if member_id == join_request.user_id:
+                    continue
+
+                notification_payload = {
+                    "user_id": member_id,
+                    "team_application_id": team_app.id,
+                    "message": f"{new_member_name} has joined your team '{team_app.team_name}'",
+                    "type": "new_member_added"
+                }
+                
+                publish_notification_event(notification_payload)
+
+            notification_payload = {
+                "user_id": join_request.user_id,
+                "team_application_id": team_app.id,
+                "message": f"You have been added to team '{team_app.team_name}'",
+                "type": "request_accepted"
+            }
+            
+            publish_notification_event(notification_payload)
             return Response({"message": f"Request {new_status} successfully"})
         
+        
+
         return Response(serializer.errors, status=400)
 
 class FetchUserView(APIView):
@@ -203,6 +314,7 @@ class FetchUserView(APIView):
         users = CustomUser.objects.all()
         serializer = CustomUserSerializer(users, many=True)
         return Response({"data": serializer.data})
+
 
 class FetchSkillsView(APIView):
     def get(self, request):
@@ -212,261 +324,65 @@ class FetchSkillsView(APIView):
 
 
 
+class TeamMetaView(APIView):
+    def get(self, request, team_id):
+        try:
+            team = TeamApplication.objects.get(id=team_id)
+            leader = CustomUser.objects.get(id=team.leader_user_id)
+
+            return Response({
+                "team_name": team.team_name,
+                "leader_name": leader.full_name,
+                "profile_image": leader.profile_image
+            })
+
+        except TeamApplication.DoesNotExist:
+            return Response({"error": "Team not found"}, status=404)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "Leader not found"}, status=404)
 
 
 
 
+from rest_framework import status
+from .serializers import TeamApplicationDetailSerializer
+# or whatever function you use to decode JWT manually
 
+class TeamApplicationDetailView(APIView):
+    def get(self, request, pk):
+        # Step 1: Get the team application
+        try:
+            app = TeamApplication.objects.get(id=pk)
+        except TeamApplication.DoesNotExist:
+            return Response({"detail": "Team not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Step 2: Extract user ID (optional, in case you still need it later)
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.split(" ")[1] if " " in auth_header else None
 
+        try:
+            user_id = verify_user(token) if token else None
+        except (AuthenticationFailed, ValueError, TypeError):
+            user_id = None
 
-# class CreateTeamApplicationView(APIView):
-#     def post(self, request):
-#         # Step 1: Validate token
-#         try:
-#             token = request.headers.get('Authorization', '').split(' ')[1]
-#             print("TOKEN: ")
-#             print(token)
-#         except IndexError:
-#             return Response({"error": "Invalid or missing token"}, status=400)
+        # Step 3: Build user + skill maps
+        all_user_ids = set([app.leader_user_id] + app.member_user_ids)
+        skill_ids = app.skills
 
-#         headers = {
-#             'Authorization': f'Bearer {token}'
-#         }
+        user_map = {
+            user.id: user for user in CustomUser.objects.filter(id__in=all_user_ids)
+        }
+        skill_map = {
+            skill.id: skill.skill for skill in Skill.objects.filter(id__in=skill_ids)
+        }
 
-#         user_service_url = os.getenv("USER_SERVICE_URL", "http://user-service:8000/api/verify-user/")
-#         user_service_skill_sync_url = os.getenv("USER_SERVICE_SKILL_SYNC_URL", "http://user-service:8000/api/sync-get-skills/")
-
-#         try:
-#             # Step 2: Verify user
-#             response = requests.get(user_service_url, headers=headers)
-#             print("User service response JSON:", response.json())
-#             if response.status_code != 200 or not response.json().get("valid"):
-#                 return Response({"error": "Unauthorized"}, status=401)
-
-#             user_json = response.json()
-#             user_id = user_json.get("user_id")
-#             # leader_name = user_json.get("name")  
-#         except Exception as e:
-#             return Response({"error": "User service unreachable", "details": str(e)}, status=500)
-
-#         # Step 3: Extract data from request body
-#         data = request.data
-#         try:
-#             title = data["title"]
-#             description = data.get("description", "")
-#             team_name = data["team_name"]
-#             capacity = int(data["capacity"])
-#             hackathon_date = data["hackathon_date"]
-#             skills = data.get("skills", [])  # List of skill names (strings)
-#         except KeyError as e:
-#             return Response({"error": f"Missing required field: {e.args[0]}"}, status=400)
-
-#         # Step 4: Sync skills with user-service
-#         try:
-#             skill_sync_res = requests.post(user_service_skill_sync_url, json={"skills": skills}, headers=headers)
-#             if skill_sync_res.status_code != 200:
-#                 return Response({"error": "Failed to sync skills"}, status=skill_sync_res.status_code)
-
-#             skill_data = skill_sync_res.json()
-#             skill_ids = [skill["id"] for skill in skill_data.get("skills", [])]
-
-#         except Exception as e:
-#             return Response({"error": "Skill sync failed", "details": str(e)}, status=500)
-
-
-#         # Step 5: Create TeamApplication
-#         try:
-#             team_app = TeamApplication.objects.create(
-#                 title=title,
-#                 description=description,
-#                 leader_user_id=user_id,
-#                 # leader_name=leader_name, 
-#                 team_name=team_name,
-#                 capacity=capacity,
-#                 capacity_left=capacity,  # initially all spots are open
-#                 skills=skill_ids,
-#                 member_user_ids=[user_id],  # leader is also a member
-#                 hackathon_date=hackathon_date,
-#             )
-#         except Exception as e:
-#             return Response({"error": "Could not create team application", "details": str(e)}, status=500)
-
-
-#         return Response({
-#             "message": "Team application created successfully",
-#             "team_id": team_app.id,
-#             "skills": skill_data
-#         }, status=201)
-        
-
-# class ListTeamApplicationsView(APIView):
-#     def get(self, request):
-#         try:
-#             team_apps = TeamApplication.objects.all().order_by('-created_at')
-#             serializer = TeamApplicationListSerializer(team_apps, many=True)
-#             return Response(serializer.data, status=200)
-#         except Exception as e:
-#             return Response({"error": "Failed to fetch team applications", "details": str(e)}, status=500)
-
-
-# class CreateTeamJoinRequestView(APIView):
-#     def post(self, request):
-
-#         try:
-#             token = request.headers.get('Authorization', '').split(' ')[1]
-#         except IndexError:
-#             return Response({"error": "Invalid or missing token"}, status=400)
-
-#         headers = {'Authorization': f'Bearer {token}'}
-#         user_service_url = os.getenv("USER_SERVICE_URL", "http://user-service:8000/api/verify-user/")
-
-#         try:
-#             res = requests.get(user_service_url, headers=headers)
-#             if res.status_code != 200 or not res.json().get("valid"):
-#                 return Response({"error": "Unauthorized"}, status=401)
-#             user_id = res.json().get("user_id")
-#             # user_name = res.json().get("name")
-#         except Exception as e:
-#             return Response({"error": "User service unreachable", "details": str(e)}, status=500)
-
-#         data = request.data
-#         try:
-#             team_app_id = data["team_application"]
-#             message = data.get("message", "")
-#         except KeyError as e:
-#             return Response({"error": f"Missing required field: {e.args[0]}"}, status=400)
-
-
-#         try:
-#             team_app = TeamApplication.objects.get(id=team_app_id)
-#         except TeamApplication.DoesNotExist:
-#             return Response({"error": "Team application not found"}, status=404)
-
-#         try:
-#             hackathon_date = team_app.hackathon_date
-#             if hackathon_date < date.today():
-#                 return Response({"error": "Hackathon date has already passed"}, status=400)
-#         except Exception:
-#             return Response({"error": "Invalid hackathon date in record"}, status=500)
-
-
-#         if TeamJoinRequest.objects.filter(team_application=team_app, user_id=user_id).exists():
-#             return Response({"error": "Join request already submitted for this team"}, status=400)
-
-
-#         try:
-#             join_request = TeamJoinRequest.objects.create(
-#                 team_application=team_app,
-#                 user_id=user_id,
-#                 # user_name=user_name,
-#                 message=message,
-#             )
-#             serializer = TeamJoinRequestSerializer(join_request)
-#             return Response(serializer.data, status=201)
-#         except Exception as e:
-#             return Response({"error": "Could not create join request", "details": str(e)}, status=500)
-
-
-# class ListTeamJoinRequestsView(APIView):
-#     def get(self, request, team_id):
-#         # Step 1: Extract and verify token
-#         try:
-#             token = request.headers.get('Authorization', '').split(' ')[1]
-#         except IndexError:
-#             return Response({"error": "Invalid or missing token"}, status=400)
-
-#         headers = {'Authorization': f'Bearer {token}'}
-#         user_service_url = os.getenv("USER_SERVICE_URL", "http://user-service:8000/api/verify-user/")
-
-#         try:
-#             res = requests.get(user_service_url, headers=headers)
-#             if res.status_code != 200 or not res.json().get("valid"):
-#                 return Response({"error": "Unauthorized"}, status=401)
-#             user_id = res.json().get("user_id")
-#         except Exception as e:
-#             return Response({"error": "User service unreachable", "details": str(e)}, status=500)
-
-#         # Step 2: Validate the team application and leader
-#         try:
-#             team_app = TeamApplication.objects.get(id=team_id)
-#             print("CREATOR OF APPLICATION: ")
-#             print(team_app.leader_user_id)
-#             print("SENDER ID: ")
-#             print(user_id)
-#         except TeamApplication.DoesNotExist:
-#             return Response({"error": "Team application not found"}, status=404)
-
-#         if int(team_app.leader_user_id) != int(user_id):
-#             return Response({"error": "Only the team leader can view join requests"}, status=403)
-
-#         # Step 3: Fetch all join requests for this team
-#         join_requests = TeamJoinRequest.objects.filter(team_application=team_app).order_by('-created_at')
-#         serializer = TeamJoinRequestSerializer(join_requests, many=True)
-#         return Response(serializer.data, status=200)
-
-
-# class UpdateJoinRequestStatusView(APIView):
-#     def patch(self, request, request_id):
-#         # Step 1: Authenticate requester
-#         try:
-#             token = request.headers.get('Authorization', '').split(' ')[1]
-#         except IndexError:
-#             return Response({"error": "Invalid or missing token"}, status=400)
-
-#         headers = {'Authorization': f'Bearer {token}'}
-#         user_service_url = os.getenv("USER_SERVICE_URL", "http://user-service:8000/api/verify-user/")
-
-#         try:
-#             res = requests.get(user_service_url, headers=headers)
-#             if res.status_code != 200 or not res.json().get("valid"):
-#                 return Response({"error": "Unauthorized"}, status=401)
-#             user_id = res.json().get("user_id")
-#         except Exception as e:
-#             return Response({"error": "User service unreachable", "details": str(e)}, status=500)
-
-
-#         try:
-#             join_request = TeamJoinRequest.objects.select_related('team_application').get(id=request_id)
-#         except TeamJoinRequest.DoesNotExist:
-#             return Response({"error": "Join request not found"}, status=404)
-
-#         team_app = join_request.team_application
-
-#         if int(team_app.leader_user_id) != int(user_id):
-#             return Response({"error": "Only the team leader can update the request status"}, status=403)
-
-#         if join_request.status != 'pending':
-#             return Response({"error": f"Request already {join_request.status}"}, status=400)
-
-
-#         serializer = TeamJoinRequestStatusUpdateSerializer(join_request, data=request.data, partial=True)
-#         if serializer.is_valid():
-#             new_status = serializer.validated_data.get('status')
-#             serializer.save()
-
-
-#             if new_status == 'accepted':
-#                 if team_app.capacity_left <= 0:
-#                     return Response({"error": "Team is already full"}, status=400)
-
-#                 team_app.member_user_ids.append(join_request.user_id)
-#                 team_app.capacity_left -= 1
-#                 team_app.save()
-
-#             return Response({"message": f"Request {new_status} successfully"})
-#         return Response(serializer.errors, status=400)
-
-
-# class FetchUserView(APIView):
-#     def get(self, request):
-#         users = CustomUser.objects.all()
-#         serializer = CustomUserSerializer(users, many=True)
-#         return Response({"data": serializer.data})
-    
-
-# class FetchSkillsView(APIView):
-#     def get(self, request):
-#         skills = Skill.objects.all()
-#         serializer = FetchSkillsSerializer(skills, many=True)
-#         return Response({"data": serializer.data})
+        # Step 4: Serialize with context (no join requests)
+        serializer = TeamApplicationDetailSerializer(
+            app,
+            context={
+                "request": request,
+                "user_map": user_map,
+                "skill_map": skill_map,
+            },
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
