@@ -22,7 +22,8 @@ def connect_to_rabbitmq(params, retries=5, delay=5):
 def callback(ch, method, properties, body):
     data = json.loads(body)
     print(f"\n[✓] Received user.created event:\n{json.dumps(data, indent=2)}\n")
-
+    print(data)
+    print("\n\n\n\n\n\n\n")
     # Upsert user by primary key
     CustomUser.objects.update_or_create(
         id=data["id"],

@@ -8,7 +8,9 @@ import jwt
 import os
 from .rabbitmq.sender_users import publish_user_created
 from .rabbitmq.sender_skill_created import publish_skill_created_event
-from .serializers import UserDetailSerializer
+from .serializers import UserDetailSerializer, CustomUserDetailSerializer
+from django.core.files.storage import default_storage
+from rest_framework.exceptions import NotFound
 
 class LoginView(APIView):
     def post(self, request):
@@ -28,7 +30,7 @@ class LoginView(APIView):
                 }
             })
         return Response({"error": "Invalid credentials"}, status=401)
-
+    
 
 
 class RegisterView(APIView):
@@ -36,13 +38,13 @@ class RegisterView(APIView):
         email = request.data.get("email")
         full_name = request.data.get("full_name")
         password = request.data.get("password")
-
+        
         skills_names = request.POST.getlist("skills")
         profile_image_file = request.FILES.get("profile_image")
-
+        print('check 1')
         if CustomUser.objects.filter(email=email).exists():
             return Response({"error": "Email already registered."}, status=400)
-
+        print('check 2')
         valid_skills = []
         for skill_name in skills_names:
             skill_name_cleaned = skill_name.strip()
@@ -50,16 +52,21 @@ class RegisterView(APIView):
             if created:
                 publish_skill_created_event(skill_obj)
             valid_skills.append(skill_obj)
-
+        print('check 3')
         user = CustomUser.objects.create_user(
             email=email,
             full_name=full_name,
             password=password,
             profile_image=profile_image_file
         )
+        print('check 4')
+        # print("USER")
+        # print(user.profile_image)
+        # print("\n\n\n\n\n\n\n\n\n")
+        
         user.skills.set(valid_skills)
         publish_user_created(user)
-
+        print('check 5')
         token = generate_jwt(user)
         return Response({
             "token": token,
@@ -72,39 +79,6 @@ class RegisterView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-
-# class RegisterView(APIView):
-#     def post(self, request):
-#         email = request.data.get("email")
-#         full_name = request.data.get("full_name")
-#         password = request.data.get("password")
-#         # skills_names = request.data.get("skills", [])
-#         skills_names = request.POST.getlist("skills")
-#         print(request.POST)
-
-#         profile_image_file = request.FILES.get("profile_image")  
-
-#         if CustomUser.objects.filter(email=email).exists():
-#             return Response({"error": "Email already registered."}, status=400)
-
-#         valid_skills = []
-#         for skill_name in skills_names:
-#             skill_obj, _ = Skill.objects.get_or_create(skill__iexact=skill_name.strip())
-#             valid_skills.append(skill_obj)
-
-#         # Create user with profile image
-#         user = CustomUser.objects.create_user(
-#             email=email,
-#             full_name=full_name,
-#             password=password,
-#             profile_image=profile_image_file
-#         )
-#         user.skills.set(valid_skills)
-
-#         publish_user_created(user)
-        
-#         token = generate_jwt(user)
-#         return Response({"token": token}, status=status.HTTP_201_CREATED)
 
 
 class VerifyUser(APIView):
@@ -164,3 +138,14 @@ class UserBatchDetailView(APIView):
         users = CustomUser.objects.filter(id__in=ids)
         serializer = UserDetailSerializer(users, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+class PublicUserDetailView(APIView):
+    def get(self, request, user_id):
+        try:
+            user = CustomUser.objects.get(id=user_id)
+            serializer = CustomUserDetailSerializer(user, context={"request": request})
+            return Response(serializer.data)
+        except CustomUser.DoesNotExist:
+            raise NotFound("User not found.")
+

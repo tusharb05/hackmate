@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
+from django.core.files.storage import default_storage
+
 
 class TeamApplication(models.Model):
     title = models.CharField(max_length=255)
@@ -56,8 +58,9 @@ class CustomUser(models.Model):
     id = models.IntegerField(primary_key=True)       
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=255)
-    profile_image = models.URLField(max_length=1000, null=True, blank=True)
-
+    # profile_image = models.URLField(max_length=1000, null=True, blank=True)
+    profile_image = models.CharField(max_length=1000, null=True, blank=True)
+    
     def __str__(self):
         return self.email
     

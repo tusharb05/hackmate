@@ -7,6 +7,9 @@ if [ "$RUN_MIGRATIONS" != "false" ]; then
   echo "Applying database migrations..."
   python -u ./team_service/manage.py makemigrations
   python -u ./team_service/manage.py migrate
+
+  echo "Setting up periodic tasks..."
+  python -u ./team_service/manage.py setup_periodic_tasks
 fi
 
 # Execute the command passed to the container (e.g., runserver or a consumer script)

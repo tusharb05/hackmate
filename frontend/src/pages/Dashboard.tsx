@@ -4,6 +4,7 @@ import axios from "axios";
 import RequestModal from "../components/RequestModal";
 import CreateTeamModal from "../components/CreateTeamModal";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
 	const { user, token } = useAuthContext();
@@ -13,6 +14,8 @@ const Dashboard = () => {
 	const [selectedApp, setSelectedApp] = useState<any | null>(null);
 	const [message, setMessage] = useState("");
 	const [showCreateModal, setShowCreateModal] = useState(false);
+
+	const navigate = useNavigate();
 
 	const fetchApplications = async () => {
 		try {
@@ -191,15 +194,10 @@ const Dashboard = () => {
 										notifications.map((notif: any) => (
 											<li
 												key={notif.id}
-												className="flex gap-3 items-start p-2 rounded-lg hover:bg-slate-50">
-												<img
-													src={
-														notif.profile_image ||
-														"https://via.placeholder.com/80"
-													}
-													alt="profile"
-													className="w-10 h-10 rounded-full object-cover border"
-												/>
+												onClick={() =>
+													navigate(`/team/${notif.team_application_id}`)
+												}
+												className="flex gap-3 items-start p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
 												<div>
 													<p className="text-sm text-slate-700">
 														{notif.message}

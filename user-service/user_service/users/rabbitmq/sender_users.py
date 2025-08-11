@@ -1,5 +1,7 @@
 import pika, json
 from django.conf import settings
+from django.core.files.storage import default_storage
+
 
 def publish_user_created(user):
     params = pika.URLParameters(settings.RABBITMQ_URL)
@@ -7,12 +9,12 @@ def publish_user_created(user):
     ch = conn.channel()
 
     ch.exchange_declare(settings.USER_EVENTS_EXCHANGE, exchange_type='topic', durable=True)
-
+    print(user.profile_image.name)
     payload = {
         "id": user.id,
         "email": user.email,
         "full_name": user.full_name,
-        "profile_image": user.profile_image.url if user.profile_image else None,
+        "profile_image": user.profile_image.name if user.profile_image else None
     }
     ch.basic_publish(
         exchange=settings.USER_EVENTS_EXCHANGE,

@@ -5,3 +5,7 @@ requests
 pika
 PyJWT
 django-cors-headers
+django-storages
+boto3
+celery
+django-celery-beat

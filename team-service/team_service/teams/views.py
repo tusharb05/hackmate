@@ -8,7 +8,7 @@ from .models import TeamApplication, TeamJoinRequest, CustomUser, Skill
 from datetime import date
 from .utils.verify_user import verify_user
 from rest_framework.exceptions import AuthenticationFailed
-
+from django.core.files.storage import default_storage
 
 # Create your views here.
 
@@ -35,24 +35,24 @@ class CreateTeamApplicationView(APIView):
         serializer = CreateTeamApplicationSerializer(data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
-        
+
         validated_data = serializer.validated_data
 
         # Step 4: Sync skills with user-service to get/create skill IDs
         user_service_skill_sync_url = os.getenv("USER_SERVICE_SKILL_SYNC_URL", "http://user-service:8000/api/sync-get-skills/")
         headers = {'Authorization': f'Bearer {token}'}
-        
+
         try:
             skill_sync_res = requests.post(user_service_skill_sync_url, json={"skills": skills}, headers=headers)
-            skill_sync_res.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+            skill_sync_res.raise_for_status()
 
             skill_data = skill_sync_res.json()
             skill_ids = [skill["id"] for skill in skill_data.get("skills", [])]
 
         except requests.exceptions.RequestException as e:
-            return Response({"error": "Skill sync with user-service failed", "details": str(e)}, status=502) # 502 Bad Gateway is appropriate here
+            return Response({"error": "Skill sync with user-service failed", "details": str(e)}, status=502)
         except (KeyError, TypeError):
-             return Response({"error": "Invalid response format from skill service"}, status=500)
+            return Response({"error": "Invalid response format from skill service"}, status=500)
 
         # Step 5: Create TeamApplication
         try:
@@ -60,7 +60,7 @@ class CreateTeamApplicationView(APIView):
                 leader_user_id=user_id,
                 skills=skill_ids,
                 member_user_ids=[user_id],
-                capacity_left=validated_data['capacity'],
+                capacity_left=validated_data['capacity'] - 1,
                 **validated_data
             )
         except Exception as e:
@@ -69,10 +69,8 @@ class CreateTeamApplicationView(APIView):
         return Response({
             "message": "Team application created successfully",
             "team_id": team_app.id,
-            "skills": skill_data # Return the full skill data from user-service
+            "skills": skill_data
         }, status=201)
-
-
 
 class ListTeamApplicationsView(APIView):
     def get(self, request):
@@ -244,7 +242,7 @@ class UpdateJoinRequestStatusView(APIView):
             return Response({"error": "Authorization header is missing or invalid"}, status=401)
         except AuthenticationFailed as e:
             return Response({"error": str(e)}, status=401)
-            
+
         # Step 2: Fetch join request and verify leader
         try:
             join_request = TeamJoinRequest.objects.select_related('team_application').get(id=request_id)
@@ -258,29 +256,34 @@ class UpdateJoinRequestStatusView(APIView):
 
         if join_request.status != 'pending':
             return Response({"error": f"Request already {join_request.status}"}, status=400)
-        
+
         # Step 3: Update status
         serializer = TeamJoinRequestStatusUpdateSerializer(join_request, data=request.data, partial=True)
         if serializer.is_valid():
             new_status = serializer.validated_data.get('status')
-            
+
             if new_status == 'accepted':
                 if team_app.capacity_left <= 0:
                     return Response({"error": "Team is already full"}, status=400)
 
+                # Add new member and reduce capacity
                 team_app.member_user_ids.append(join_request.user_id)
                 team_app.capacity_left -= 1
+
+                # Check if team is now full
+                if team_app.capacity_left == 0:
+                    team_app.status = "filled"
+
                 team_app.save()
 
             serializer.save()
 
+            # Notification for other team members
             try:
                 new_member = CustomUser.objects.get(id=join_request.user_id)
+                new_member_name = new_member.full_name
             except CustomUser.DoesNotExist:
                 new_member_name = "A new member"
-            else:
-                new_member_name = new_member.full_name
-
 
             for member_id in team_app.member_user_ids:
                 if member_id == join_request.user_id:
@@ -292,22 +295,23 @@ class UpdateJoinRequestStatusView(APIView):
                     "message": f"{new_member_name} has joined your team '{team_app.team_name}'",
                     "type": "new_member_added"
                 }
-                
                 publish_notification_event(notification_payload)
 
+            # Notification to new member
             notification_payload = {
                 "user_id": join_request.user_id,
                 "team_application_id": team_app.id,
                 "message": f"You have been added to team '{team_app.team_name}'",
                 "type": "request_accepted"
             }
-            
             publish_notification_event(notification_payload)
+
             return Response({"message": f"Request {new_status} successfully"})
-        
-        
 
         return Response(serializer.errors, status=400)
+
+
+
 
 class FetchUserView(APIView):
     def get(self, request):
@@ -323,6 +327,7 @@ class FetchSkillsView(APIView):
         return Response({"data": serializer.data})
 
 
+from .utils.generate_s3_url import generate_presigned_s3_url
 
 class TeamMetaView(APIView):
     def get(self, request, team_id):
@@ -330,10 +335,15 @@ class TeamMetaView(APIView):
             team = TeamApplication.objects.get(id=team_id)
             leader = CustomUser.objects.get(id=team.leader_user_id)
 
+            image_url = leader.profile_image
+            print("URLLLLLLLLLLL")
+            print(generate_presigned_s3_url(leader.profile_image))
+            print("\n\n\n\n\n\n\n\n")
+            
             return Response({
                 "team_name": team.team_name,
                 "leader_name": leader.full_name,
-                "profile_image": leader.profile_image
+                "profile_image": image_url
             })
 
         except TeamApplication.DoesNotExist:
@@ -386,3 +396,51 @@ class TeamApplicationDetailView(APIView):
             },
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+from django.db.models import Q
+
+class UserTeamsView(APIView):
+    def get(self, request):
+        try:
+            token = request.headers.get('Authorization', '').split(' ')[1]
+            user_id = verify_user(token)
+        except IndexError:
+            return Response({"error": "Authorization header is missing or invalid"}, status=401)
+        except AuthenticationFailed as e:
+            return Response({"error": str(e)}, status=401)
+
+
+        # Fetch all relevant teams
+        teams = TeamApplication.objects.filter(
+            Q(leader_user_id=user_id) |
+            Q(member_user_ids__contains=[user_id])
+        )
+
+        # Fetch all needed user and skill data for enrichment
+        all_user_ids = set()
+        all_skill_ids = set()
+        for team in teams:
+            all_user_ids.add(team.leader_user_id)
+            all_user_ids.update(team.member_user_ids)
+            all_skill_ids.update(team.skills)
+
+        user_map = {user.id: user for user in CustomUser.objects.filter(id__in=all_user_ids)}
+        skill_map = {skill.id: skill.skill for skill in Skill.objects.filter(id__in=all_skill_ids)}
+
+        # Map of team IDs that user has sent join requests to (optional if not needed here)
+        user_join_requests = set()
+
+        serializer = TeamApplicationListSerializer(
+            teams,
+            many=True,
+            context={
+                "current_user_id": user_id,
+                "user_map": user_map,
+                "skill_map": skill_map,
+                "user_join_requests_map": user_join_requests,
+            }
+        )
+        return Response(serializer.data)

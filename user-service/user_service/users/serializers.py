@@ -25,3 +25,24 @@ class UserDetailSerializer(serializers.ModelSerializer):
         elif obj.profile_image:
             return obj.profile_image.url
         return None
+    
+
+class SkillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Skill
+        fields = ["id", "skill"]
+
+
+class CustomUserDetailSerializer(serializers.ModelSerializer):
+    skills = SkillSerializer(many=True)
+    profile_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = ["id", "email", "full_name", "skills", "profile_image"]
+
+    def get_profile_image(self, obj):
+        request = self.context.get("request")
+        if obj.profile_image:
+            return request.build_absolute_uri(obj.profile_image.url)
+        return None

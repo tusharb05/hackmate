@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import TeamApplicationDetailView, TeamMetaView, FetchSkillsView, FetchUserView, UpdateJoinRequestStatusView, CreateTeamApplicationView, ListTeamApplicationsView, CreateTeamJoinRequestView, ListTeamJoinRequestsView
+from .views import UserTeamsView, TeamApplicationDetailView, TeamMetaView, FetchSkillsView, FetchUserView, UpdateJoinRequestStatusView, CreateTeamApplicationView, ListTeamApplicationsView, CreateTeamJoinRequestView, ListTeamJoinRequestsView
+
 
 urlpatterns = [
     path('create-team-application/', CreateTeamApplicationView.as_view(), name='create-team'),
@@ -11,4 +12,5 @@ urlpatterns = [
     path('fetch-skills/', FetchSkillsView.as_view(), name='get-skills'),
     path("teams/<int:team_id>/meta/", TeamMetaView.as_view()),
     path('team/<int:pk>/', TeamApplicationDetailView.as_view(), name='team-detail'),
+    path('user/teams/', UserTeamsView.as_view(), name='user-teams'),
 ]

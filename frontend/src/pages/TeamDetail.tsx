@@ -1,8 +1,10 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const TeamDetail = () => {
+	const navigate = useNavigate();
 	const { teamId } = useParams();
 	const { user, token } = useAuthContext();
 	const [team, setTeam] = useState<any>(null);
@@ -115,14 +117,21 @@ const TeamDetail = () => {
 				{/* Sections */}
 				<div className="space-y-8">
 					<TeamSection title="Team Leader">
-						<UserCard user={team.leader} />
+						<UserCard
+							user={team.leader}
+							onClick={() => navigate(`/user/${team.leader.id}`)}
+						/>
 					</TeamSection>
 
 					<TeamSection title="Team Members">
 						{team.members.length > 0 ? (
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								{team.members.map((member: any) => (
-									<UserCard key={member.id} user={member} />
+									<UserCard
+										key={member.id}
+										user={member}
+										onClick={() => navigate(`/user/${member.id}`)}
+									/>
 								))}
 							</div>
 						) : (
@@ -175,8 +184,10 @@ const TeamSection = ({
 	</div>
 );
 
-const UserCard = ({ user }: { user: any }) => (
-	<div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+const UserCard = ({ user, onClick }: { user: any; onClick?: () => void }) => (
+	<div
+		className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer"
+		onClick={onClick}>
 		<img
 			src={user.profile_image || "https://via.placeholder.com/80"}
 			alt={user.full_name}
@@ -188,6 +199,7 @@ const UserCard = ({ user }: { user: any }) => (
 		</div>
 	</div>
 );
+
 
 const JoinRequestCard = ({
 	request,

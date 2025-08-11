@@ -30,7 +30,7 @@ class GetNotificationsView(APIView):
                 # Fetch team data from team-service
                 team_res = requests.get(f"http://team-service:8000/api/teams/{notif.team_application_id}/meta/")
                 team_data = team_res.json()
-
+                
                 enriched = {
                     "id": notif.id,
                     "user_id": notif.user_id,
@@ -41,7 +41,7 @@ class GetNotificationsView(APIView):
                     "created_at": notif.created_at,
                     "team_name": team_data.get("team_name"),
                     "leader_name": team_data.get("leader_name"),
-                    "profile_image": team_data.get("profile_image")
+                    # "profile_image": team_data.get("profile_image")
                 }
                 enriched_notifications.append(enriched)
             except Exception as e:

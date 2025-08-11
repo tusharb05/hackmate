@@ -45,6 +45,15 @@ NOTIFICATION_QUEUE = "notification_queue"
 #####
 
 
+##### CELERY VARS
+CELERY_BROKER_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_TASK_DEFAULT_QUEUE = 'team-tasks'
+#####
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -55,7 +64,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'teams',
-    'corsheaders'
+    'corsheaders',
+    "django_celery_beat",
 ]
 
 MIDDLEWARE = [
@@ -90,6 +100,28 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'team_service.wsgi.application'
+
+print("SETTINGS")
+print(os.getenv("AWS_ACCESS_KEY_ID"))
+print("\n\n\n\n\n\n\n")
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "ap-south-1")
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
+AWS_S3_FILE_OVERWRITE = False
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = True  # needed for pre-signed URLs
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/profile_images/'
+MEDIA_ROOT = 'profile_images/'
+
+# By default, files are private. We will generate pre-signed URLs to access them.
+AWS_DEFAULT_ACL = 'private'
+
 
 
 # Database
