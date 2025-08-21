@@ -9,3 +9,13 @@ user-service/.env
 *.pyc
 
 **/migrations/
+
+**/.pem
+
+**/.terraform.lock.hcl
+
+**/terraform.tfstate.backup
+
+**/.terraform/
+
+**/terraform.tfstate
