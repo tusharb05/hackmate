@@ -236,6 +236,7 @@ services:
       team-service-migrate:
         condition: service_completed_successfully
 
+
 volumes:
   pgdata:
   team_pgdata:

@@ -19,3 +19,5 @@ user-service/.env
 **/.terraform/
 
 **/terraform.tfstate
+
+*.tfvars
