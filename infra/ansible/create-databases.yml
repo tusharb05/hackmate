@@ -1,0 +1,34 @@
+- name: Create databases and users in RDS
+  hosts: localhost
+  gather_facts: false
+
+  vars_files:
+      - group_vars/rds.yml
+
+  tasks:
+      - name: Create databases
+        community.postgresql.postgresql_db:
+            name: "{{ item.name }}"
+            state: present
+            login_host: "{{ rds_host }}"
+            login_port: "{{ rds_port }}"
+            login_user: "{{ rds_master_user }}"
+            login_password: "{{ rds_master_password }}"
+        loop: "{{ databases }}"
+
+      - name: Create users
+        community.postgresql.postgresql_user:
+            name: "{{ item.user }}"
+            password: "{{ item.password }}"
+            priv: "{{ item.name }}:ALL"
+            state: present
+            login_host: "{{ rds_host }}"
+            login_port: "{{ rds_port }}"
+            login_user: "{{ rds_master_user }}"
+            login_password: "{{ rds_master_password }}"
+        loop: "{{ databases }}"
+
+      - name: Output connection URLs
+        debug:
+            msg: "postgres://{{ item.user }}:{{ item.password }}@{{ rds_host }}:{{ rds_port }}/{{ item.name }}"
+        loop: "{{ databases }}"

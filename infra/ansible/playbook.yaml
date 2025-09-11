@@ -1,0 +1,199 @@
+- name: Deploy HackMate services
+  hosts:
+      - user-service
+      - team-service
+      - notification-service
+      - rabbitmq
+  become: true
+  tasks:
+      - name: Install Docker dependencies
+        apt:
+            name:
+                - apt-transport-https
+                - ca-certificates
+                - curl
+                - software-properties-common
+            state: present
+            update_cache: yes
+
+      - name: Add Docker's official GPG key
+        apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+      - name: Add Docker APT repository
+        apt_repository:
+            repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+            state: present
+            filename: docker
+
+      - name: Install Docker
+        apt:
+            name: docker-ce
+            state: present
+            update_cache: yes
+
+      - name: Ensure Docker service is running
+        systemd:
+            name: docker
+            state: started
+            enabled: true
+
+      - name: Add current user to docker group
+        user:
+            name: "{{ ansible_user }}"
+            groups: docker
+            append: yes
+
+      - name: Wait for Docker socket to be available
+        wait_for:
+            path: /var/run/docker.sock
+            state: present
+            timeout: 30
+
+      - name: Pull required Docker images
+        docker_image:
+            name: "{{ item }}"
+            source: pull
+        loop:
+            - "{{ user_service_image | default('') }}"
+            - "{{ team_service_image | default('') }}"
+            - "{{ notification_service_image | default('') }}"
+            - "{{ rabbitmq_image | default('') }}"
+        when: item != ''
+
+      - name: Create Docker network
+        docker_network:
+            name: hackmate_network
+            state: present
+
+- name: Run rabbitmq container
+  hosts: rabbitmq
+  become: true
+  tasks:
+      - name: Run rabbitmq
+        docker_container:
+            name: rabbitmq
+            image: "{{ rabbitmq_image }}"
+            state: started
+            restart_policy: always
+            ports:
+                - "5672:5672"
+                - "15672:15672"
+            env: "{{ rabbitmq_env }}"
+            networks:
+                - name: hackmate_network
+
+- name: Run user-service container
+  hosts: user-service
+  become: true
+  tasks:
+      - name: Run user-service
+        docker_container:
+            name: user-service
+            image: "{{ user_service_image }}"
+            state: started
+            restart_policy: always
+            ports:
+                - "8001:8000"
+            env: "{{ user_service_env }}"
+            networks:
+                - name: hackmate_network
+
+- name: Run team-service containers
+  hosts: team-service
+  become: true
+  tasks:
+      - name: Run team-service migrate container
+        docker_container:
+            name: team-service-migrate
+            image: "{{ team_service_image }}"
+            state: started
+            restart_policy: no
+            command: python team_service/manage.py migrate
+            env: "{{ team_service_env | combine({'RUN_MIGRATIONS': 'true'}) }}"
+            networks:
+                - name: hackmate_network
+
+      - name: Run team-service
+        docker_container:
+            name: team-service
+            image: "{{ team_service_image }}"
+            state: started
+            restart_policy: always
+            ports:
+                - "8002:8000"
+            env: "{{ team_service_env }}"
+            networks:
+                - name: hackmate_network
+
+      - name: Run team-consumer container
+        docker_container:
+            name: team-consumer
+            image: "{{ team_service_image }}"
+            state: started
+            restart_policy: on-failure
+            command: python team_service/consumers/user_sync.py
+            env: "{{ team_service_env }}"
+            networks:
+                - name: hackmate_network
+
+      - name: Run team-consumer-skill container
+        docker_container:
+            name: team-consumer-skill
+            image: "{{ team_service_image }}"
+            state: started
+            restart_policy: on-failure
+            command: python team_service/consumers/skill_sync.py
+            env: "{{ team_service_env }}"
+            networks:
+                - name: hackmate_network
+
+      - name: Run team-celery-worker container
+        docker_container:
+            name: team-celery-worker
+            image: "{{ team_service_image }}"
+            state: started
+            restart_policy: on-failure
+            command: celery -A team_service.celery_app worker --loglevel=info --queues=team-tasks
+            env: "{{ team_service_env }}"
+            networks:
+                - name: hackmate_network
+
+      - name: Run team-celery-beat container
+        docker_container:
+            name: team-celery-beat
+            image: "{{ team_service_image }}"
+            state: started
+            restart_policy: on-failure
+            command: celery -A team_service.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+            env: "{{ team_service_env }}"
+            networks:
+                - name: hackmate_network
+
+- name: Run notification-service containers
+  hosts: notification-service
+  become: true
+  tasks:
+      - name: Run notification-service
+        docker_container:
+            name: notification-service
+            image: "{{ notification_service_image }}"
+            state: started
+            restart_policy: always
+            ports:
+                - "8003:8000"
+            env: "{{ notification_service_env | combine({'RUN_MIGRATIONS': 'true'}) }}"
+            networks:
+                - name: hackmate_network
+
+      - name: Run notification-consumer
+        docker_container:
+            name: notification-consumer
+            image: "{{ notification_service_image }}"
+            state: started
+            restart_policy: on-failure
+            command: python notification_service/notification_service/rabbitmq/consumer_notification.py
+            env: "{{ notification_service_env }}"
+            networks:
+                - name: hackmate_network
