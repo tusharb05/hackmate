@@ -27,7 +27,7 @@ SECRET_KEY = os.getenv('USER_SERVICE_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'user-service', '0.0.0.0']
+ALLOWED_HOSTS = ['*']
 
 
 ##### RABBITMQ VARS
@@ -103,10 +103,20 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',  # Optional fallback
 ]
 
-import dj_database_url
+# import dj_database_url
 
+# DATABASES = {
+#     'default': dj_database_url.config(default=os.getenv("DATABASE_URL"))
+# }
 DATABASES = {
-    'default': dj_database_url.config(default=os.getenv("DATABASE_URL"))
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('USER_DB'),
+        'USER': os.getenv('USER_DB_USER'),
+        'PASSWORD': os.getenv('USER_DB_PASSWORD'),
+        'HOST': os.getenv('USER_DB_HOST'),
+        'PORT': os.getenv('USER_DB_PORT', 5432),
+    }
 }
 
 AUTH_USER_MODEL = 'users.CustomUser'
