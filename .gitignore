@@ -21,3 +21,10 @@ user-service/.env
 **/terraform.tfstate
 
 *.tfvars
+
+**/group_vars/
+
+control-ip.txt
+
+
+*.pem

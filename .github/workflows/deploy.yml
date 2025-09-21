@@ -4,8 +4,6 @@ on:
     push:
         branches:
             - main
-            - develop
-            - "feature/**"
 
 jobs:
     docker:
@@ -36,7 +34,7 @@ jobs:
                   context: ./${{ matrix.service }}
                   file: ./${{ matrix.service }}/Dockerfile
                   push: true
-                  tags: tusharbaweja/hackmate-repo:${{ matrix.service }}-${{ github.sha }}
+                  tags: tusharbaweja/hackmate-repo:${{ matrix.service }}-latest
 
             - name: Image digest
-              run: echo "Image for ${{ matrix.service }} pushed with tag ${{ github.sha }}"
+              run: echo "Image for ${{ matrix.service }} pushed with tag 'latest'"
