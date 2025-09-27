@@ -40,7 +40,9 @@ class CreateTeamApplicationView(APIView):
 
         # Step 4: Sync skills with user-service to get/create skill IDs
         # user_service_skill_sync_url = os.getenv("USER_SERVICE_SKILL_SYNC_URL", "http://user-service:8000/api/sync-get-skills/")
-        user_service_skill_sync_url = os.getenv(f"f{os.getenv("USER_SERVICE_SKILL_SYNC_URL")}/api/sync-get-skills")
+        user_service_base = os.getenv("USER_SERVICE_SKILL_SYNC_URL", "http://user-service:8000")
+        user_service_skill_sync_url = f"{user_service_base}/api/sync-get-skills/"
+
         headers = {'Authorization': f'Bearer {token}'}
 
         try:
