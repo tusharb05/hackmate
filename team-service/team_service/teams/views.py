@@ -39,7 +39,8 @@ class CreateTeamApplicationView(APIView):
         validated_data = serializer.validated_data
 
         # Step 4: Sync skills with user-service to get/create skill IDs
-        user_service_skill_sync_url = os.getenv("USER_SERVICE_SKILL_SYNC_URL", "http://user-service:8000/api/sync-get-skills/")
+        # user_service_skill_sync_url = os.getenv("USER_SERVICE_SKILL_SYNC_URL", "http://user-service:8000/api/sync-get-skills/")
+        user_service_skill_sync_url = os.getenv(f"f{os.getenv("USER_SERVICE_SKILL_SYNC_URL")}/api/sync-get-skills")
         headers = {'Authorization': f'Bearer {token}'}
 
         try:
@@ -71,6 +72,8 @@ class CreateTeamApplicationView(APIView):
             "team_id": team_app.id,
             "skills": skill_data
         }, status=201)
+
+
 
 class ListTeamApplicationsView(APIView):
     def get(self, request):
@@ -202,11 +205,14 @@ class ListTeamJoinRequestsView(APIView):
         if user_ids:
             # 2️⃣ Batch‑fetch from User Service
             try:
-                resp = requests.get(
-                    "http://user-service:8000/api/users/details/",
-                    params={"ids": ",".join(map(str, user_ids))},
-                    timeout=2
-                )
+                # resp = requests.get(
+                #     "http://user-service:8000/api/users/details/",
+                #     params={"ids": ",".join(map(str, user_ids))},
+                #     timeout=2
+                # )
+                resp = requests.get(f"{"USER_SERVICE_SKILL_SYNC_URL"}/api/users/details/",
+                                    params={"ids": ",".join(map(str, user_ids))},
+                                    timeout=2)
                 resp.raise_for_status()
                 users = resp.json()
             except requests.RequestException as exc:
