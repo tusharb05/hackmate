@@ -212,7 +212,8 @@ class ListTeamJoinRequestsView(APIView):
                 #     params={"ids": ",".join(map(str, user_ids))},
                 #     timeout=2
                 # )
-                resp = requests.get(f"{"USER_SERVICE_SKILL_SYNC_URL"}/api/users/details/",
+                user_service_base_url = os.getenv("USER_SERVICE_SYNC_SKILL", "http://user-service:8000")
+                resp = requests.get(f"{user_service_base_url}/api/users/details/",
                                     params={"ids": ",".join(map(str, user_ids))},
                                     timeout=2)
                 resp.raise_for_status()
