@@ -8,7 +8,7 @@ user-service/.env
 **/__pycache__/
 *.pyc
 
-**/migrations/
+# **/migrations/
 
 **/.pem
 
