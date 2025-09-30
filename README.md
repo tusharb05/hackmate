@@ -38,35 +38,32 @@ HackMate follows a **microservices architecture** with 3 core services:
 ### 📐 System Architecture Diagram
 
 ```mermaid
-graph TD
-    subgraph API Gateway [AWS API Gateway (HTTP API)]
-        A1[/ /user/* /]
-        A2[/ /team/* /]
-        A3[/ /notification/* /]
-    end
+sequenceDiagram
+    participant U as User
+    participant FE as Frontend (React)
+    participant GW as API Gateway
+    participant US as User-Service
+    participant TS as Team-Service
+    participant NS as Notification-Service
+    participant MQ as RabbitMQ
 
-    A1 --> US[User Service (EC2 + RDS)]
-    A2 --> TS[Team Service (EC2 + RDS)]
-    A3 --> NS[Notification Service (EC2 + RDS)]
+    U ->> FE: Login / Register
+    FE ->> GW: Auth Request
+    GW ->> US: Validate User
+    US -->> GW: Token Response
+    GW -->> FE: Token
 
-    US -- "User + Skill Events" --> MQ[RabbitMQ (EC2)]
-    MQ -- "Fanout/Consume" --> TS
-    TS -- "Join Request Accepted/Rejected" --> MQ
-    MQ --> NS
+    U ->> FE: Create Team / Join Request
+    FE ->> GW: Team API Request
+    GW ->> TS: Handle Team Logic
+    TS ->> MQ: Publish skill/user sync
+    MQ ->> US: Sync Skills & Users
+    MQ ->> TS: Keep Team DB Updated
 
-    subgraph Infra [AWS Infrastructure]
-        US
-        TS
-        NS
-        MQ
-        RDS[(Amazon RDS: per-service DBs)]
-        BH[Bastion Host (EC2)]
-    end
+    TS ->> MQ: Team Join Accepted/Rejected
+    MQ ->> NS: Send Notification Job
+    NS -->> U: Deliver Notification
 
-    TS --- RDS
-    US --- RDS
-    NS --- RDS
-    BH --- RDS
 ```
 
 ---
