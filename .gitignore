@@ -28,3 +28,9 @@ control-ip.txt
 
 
 *.pem
+
+
+**/inventory.ini
+
+infra/ansible/terraform_outputs.json
+infra/ansible/inventory.ini
