@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuthContext } from "../context/AuthContext";
 import { Link } from "react-router-dom";
+import { FETCH_MY_TEAMS } from "../urls";
 
 const MyTeams = () => {
 	const { token } = useAuthContext();
@@ -11,11 +12,15 @@ const MyTeams = () => {
 	useEffect(() => {
 		const fetchTeams = async () => {
 			try {
-				const res = await fetch("http://localhost:8002/api/user/teams/", {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
+				const res = await fetch(
+					// "http://localhost:8002/api/user/teams/",
+					FETCH_MY_TEAMS,
+					{
+						headers: {
+							Authorization: `Bearer ${token}`,
+						},
+					}
+				);
 				if (!res.ok) throw new Error("Failed to fetch teams");
 				const data = await res.json();
 				setTeams(data);
@@ -46,10 +51,12 @@ const MyTeams = () => {
 						<h2 className="text-xl font-semibold text-slate-800 mb-2">
 							{team.team_name}
 						</h2>
-						<p className="text-slate-600 mb-2">{team.description}</p>
+						<p className="text-slate-600 mb-2">
+							{team.description}
+						</p>
 						<div className="text-sm text-slate-500 mb-1">
-							<b>Status:</b> {team.status} &nbsp;|&nbsp; <b>Role:</b>{" "}
-							{team.user_role}
+							<b>Status:</b> {team.status} &nbsp;|&nbsp;{" "}
+							<b>Role:</b> {team.user_role}
 						</div>
 						<div className="text-sm text-slate-500 mb-1">
 							<b>Leader:</b> {team.leader_name}
@@ -59,8 +66,8 @@ const MyTeams = () => {
 							{new Date(team.hackathon_date).toDateString()}
 						</div>
 						<div className="text-sm text-slate-500 mb-1">
-							<b>Capacity:</b> {team.capacity} total, {team.capacity_left} spots
-							left
+							<b>Capacity:</b> {team.capacity} total,{" "}
+							{team.capacity_left} spots left
 						</div>
 						<div className="mt-3">
 							<span className="text-sm font-medium text-slate-700">

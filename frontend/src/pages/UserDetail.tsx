@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import { FETCH_USER_DETAILS } from "../urls";
 
 const UserDetail = () => {
 	const { userId } = useParams();
@@ -12,7 +13,8 @@ const UserDetail = () => {
 		const fetchUser = async () => {
 			try {
 				const res = await axios.get(
-					`http://localhost:8001/api/users/${userId}/`
+					// `http://localhost:8001/api/users/${userId}/`
+					`${FETCH_USER_DETAILS}${userId}/`
 				);
 				console.log(res);
 				setUser(res.data);
@@ -46,7 +48,9 @@ const UserDetail = () => {
 				</div>
 			</div>
 			<div>
-				<h3 className="font-semibold text-sm text-gray-700 mb-2">Skills:</h3>
+				<h3 className="font-semibold text-sm text-gray-700 mb-2">
+					Skills:
+				</h3>
 				<ul className="list-disc list-inside text-sm text-gray-600">
 					{user.skills.map((skill: any) => (
 						<li key={skill.id}>{skill.skill}</li>

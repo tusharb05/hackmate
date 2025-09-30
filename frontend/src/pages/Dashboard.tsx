@@ -5,6 +5,11 @@ import RequestModal from "../components/RequestModal";
 import CreateTeamModal from "../components/CreateTeamModal";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
+import {
+	FETCH_TEAM_APPLICATIONS,
+	FETCH_NOTIFICATIONS,
+	CREATE_JOIN_REQUEST,
+} from "../urls";
 
 const Dashboard = () => {
 	const { user, token } = useAuthContext();
@@ -20,9 +25,12 @@ const Dashboard = () => {
 	const fetchApplications = async () => {
 		try {
 			const res = await axios.get(
-				"http://localhost:8002/api/team-applications/",
+				// "http://localhost:8002/api/team-applications/",
+				FETCH_TEAM_APPLICATIONS,
 				{
-					headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+					headers: token
+						? { Authorization: `Bearer ${token}` }
+						: undefined,
 				}
 			);
 			setApplications(res.data);
@@ -34,9 +42,13 @@ const Dashboard = () => {
 	const fetchNotifications = async () => {
 		if (!user || !token) return;
 		try {
-			const res = await axios.get("http://localhost:8003/api/notifications/", {
-				headers: { Authorization: `Bearer ${token}` },
-			});
+			const res = await axios.get(
+				// "http://localhost:8003/api/notifications/",
+				FETCH_NOTIFICATIONS,
+				{
+					headers: { Authorization: `Bearer ${token}` },
+				}
+			);
 			setNotifications(res.data);
 			console.log(res.data);
 		} catch (error) {
@@ -48,7 +60,8 @@ const Dashboard = () => {
 		if (!selectedApp || !token) return;
 		try {
 			await axios.post(
-				"http://localhost:8002/api/join-request/",
+				// "http://localhost:8002/api/join-request/",
+				CREATE_JOIN_REQUEST,
 				{ team_application: selectedApp.id, message },
 				{ headers: { Authorization: `Bearer ${token}` } }
 			);
@@ -107,7 +120,9 @@ const Dashboard = () => {
 					{/* Main Content */}
 					<main className="lg:col-span-2 space-y-6">
 						<div className="flex justify-between items-center">
-							<h1 className="text-2xl font-bold text-slate-800">Find a Team</h1>
+							<h1 className="text-2xl font-bold text-slate-800">
+								Find a Team
+							</h1>
 							{user && (
 								<button
 									onClick={() => setShowCreateModal(true)}
@@ -139,13 +154,15 @@ const Dashboard = () => {
 										{app.description}
 									</p>
 									<div className="flex flex-wrap mt-3 gap-2">
-										{app.skill_names.map((skill: string) => (
-											<span
-												key={skill}
-												className="text-xs bg-slate-100 text-slate-700 font-medium px-2 py-1 rounded-md">
-												{skill}
-											</span>
-										))}
+										{app.skill_names.map(
+											(skill: string) => (
+												<span
+													key={skill}
+													className="text-xs bg-slate-100 text-slate-700 font-medium px-2 py-1 rounded-md">
+													{skill}
+												</span>
+											)
+										)}
 									</div>
 									<div className="flex justify-between items-center mt-4">
 										<p className="text-sm font-medium text-slate-700">
@@ -195,7 +212,9 @@ const Dashboard = () => {
 											<li
 												key={notif.id}
 												onClick={() =>
-													navigate(`/team/${notif.team_application_id}`)
+													navigate(
+														`/team/${notif.team_application_id}`
+													)
 												}
 												className="flex gap-3 items-start p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
 												<div>
@@ -203,7 +222,9 @@ const Dashboard = () => {
 														{notif.message}
 													</p>
 													<p className="text-xs text-slate-400 mt-1">
-														{new Date(notif.created_at).toLocaleString()}
+														{new Date(
+															notif.created_at
+														).toLocaleString()}
 													</p>
 												</div>
 											</li>

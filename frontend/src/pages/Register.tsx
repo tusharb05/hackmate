@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuthContext } from "../context/AuthContext";
+import { REGISTER_URL } from "../urls";
 
 const Register = () => {
 	const navigate = useNavigate();
@@ -40,6 +41,8 @@ const Register = () => {
 	};
 
 	const handleRegister = async (e: React.FormEvent) => {
+		console.log("HELLO");
+		console.log(REGISTER_URL);
 		e.preventDefault();
 		setError("");
 
@@ -56,7 +59,8 @@ const Register = () => {
 
 		try {
 			const response = await axios.post(
-				"http://localhost:8001/api/register/",
+				// "http://localhost:8001/api/register/",
+				REGISTER_URL,
 				formData,
 				{
 					headers: { "Content-Type": "multipart/form-data" },

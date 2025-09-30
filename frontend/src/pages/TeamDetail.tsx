@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { FETCH_TEAM_DETAIL, FETCH_JOIN_REQUESTS } from "../urls";
 
 const TeamDetail = () => {
 	const navigate = useNavigate();
@@ -16,13 +17,18 @@ const TeamDetail = () => {
 		if (!teamId) return;
 		try {
 			setLoading(true);
-			const res = await fetch(`http://localhost:8002/api/team/${teamId}/`);
+			// const res = await fetch(`http://localhost:8002/api/team/${teamId}/`);
+			const res = await fetch(`${FETCH_TEAM_DETAIL}${teamId}/`);
 			if (!res.ok) throw new Error("Failed to fetch team details");
 			const data = await res.json();
 			setTeam(data);
 
 			// If the logged-in user is the leader, fetch join requests
-			if (user && token && parseInt(data.leader.id) === parseInt(user.id)) {
+			if (
+				user &&
+				token &&
+				parseInt(data.leader.id) === parseInt(user.id)
+			) {
 				fetchJoinRequests(data.id);
 			}
 		} catch (err: any) {
@@ -35,7 +41,8 @@ const TeamDetail = () => {
 	const fetchJoinRequests = async (id: string) => {
 		try {
 			const res = await fetch(
-				`http://localhost:8002/api/join-requests/${id}/`,
+				// `http://localhost:8002/api/join-requests/${id}/`,
+				`${FETCH_JOIN_REQUESTS}${id}/`,
 				{
 					headers: { Authorization: `Bearer ${token}` },
 				}
@@ -54,7 +61,8 @@ const TeamDetail = () => {
 	) => {
 		try {
 			const res = await fetch(
-				`http://localhost:8002/api/join-requests/${requestId}/status/`,
+				// `http://localhost:8002/api/join-requests/${requestId}/status/`,
+				`${FETCH_JOIN_REQUESTS}${requestId}/status/`,
 				{
 					method: "PATCH",
 					headers: {
@@ -79,7 +87,9 @@ const TeamDetail = () => {
 	if (loading)
 		return (
 			<div className="flex justify-center items-center h-screen bg-slate-50">
-				<p className="text-lg font-semibold text-slate-600">Loading...</p>
+				<p className="text-lg font-semibold text-slate-600">
+					Loading...
+				</p>
 			</div>
 		);
 	if (error)
@@ -106,7 +116,10 @@ const TeamDetail = () => {
 					</p>
 					<div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6 text-sm">
 						<InfoPill label="Status" value={team.status} />
-						<InfoPill label="Hackathon Date" value={team.hackathon_date} />
+						<InfoPill
+							label="Hackathon Date"
+							value={team.hackathon_date}
+						/>
 						<InfoPill
 							label="Capacity"
 							value={`${team.members.length}/${team.capacity}`}
@@ -130,24 +143,30 @@ const TeamDetail = () => {
 									<UserCard
 										key={member.id}
 										user={member}
-										onClick={() => navigate(`/user/${member.id}`)}
+										onClick={() =>
+											navigate(`/user/${member.id}`)
+										}
 									/>
 								))}
 							</div>
 						) : (
-							<p className="text-slate-500 text-sm">No members yet.</p>
+							<p className="text-slate-500 text-sm">
+								No members yet.
+							</p>
 						)}
 					</TeamSection>
 
 					<TeamSection title="Required Skills">
 						<div className="flex flex-wrap gap-2">
-							{team.skill_names.map((skill: string, idx: number) => (
-								<span
-									key={idx}
-									className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1.5 rounded-full">
-									{skill}
-								</span>
-							))}
+							{team.skill_names.map(
+								(skill: string, idx: number) => (
+									<span
+										key={idx}
+										className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1.5 rounded-full">
+										{skill}
+									</span>
+								)
+							)}
 						</div>
 					</TeamSection>
 

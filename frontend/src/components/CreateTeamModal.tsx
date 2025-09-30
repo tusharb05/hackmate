@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import { CREATE_TEAM_APPLICATION } from "../urls";
 
 interface Props {
 	token: string;
@@ -30,7 +31,8 @@ const CreateTeamModal = ({ token, onClose, onSuccess }: Props) => {
 	const handleSubmit = async () => {
 		try {
 			await axios.post(
-				"http://localhost:8002/api/create-team-application/",
+				// "http://localhost:8002/api/create-team-application/",
+				CREATE_TEAM_APPLICATION,
 				{
 					title,
 					description,
@@ -82,7 +84,9 @@ const CreateTeamModal = ({ token, onClose, onSuccess }: Props) => {
 							placeholder="Team Capacity"
 							className="bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
 							value={capacity}
-							onChange={(e) => setCapacity(parseInt(e.target.value))}
+							onChange={(e) =>
+								setCapacity(parseInt(e.target.value))
+							}
 						/>
 						<input
 							type="date"
@@ -99,7 +103,9 @@ const CreateTeamModal = ({ token, onClose, onSuccess }: Props) => {
 								className="flex-1 bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
 								value={skillInput}
 								onChange={(e) => setSkillInput(e.target.value)}
-								onKeyDown={(e) => e.key === "Enter" && addSkill()}
+								onKeyDown={(e) =>
+									e.key === "Enter" && addSkill()
+								}
 							/>
 							<button
 								onClick={addSkill}
