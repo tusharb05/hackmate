@@ -35,6 +35,11 @@ HackMate follows a **microservices architecture** with 3 core services:
 ---
 
 
+## Architecture Diagram
+
+![Architecture diagram](./assets/arch_diagram.png)
+
+
 ---
 
 ### 📐 System Architecture Diagram
