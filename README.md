@@ -3,6 +3,8 @@
 HackMate is a platform designed to help developers **create and find hackathon teams** based on skill requirements.  
 It focuses on seamless team formation, skill matching, and real-time notifications — built with a **backend-heavy microservices architecture** and a robust DevOps pipeline.
 
+### ▶️ [Watch Demo Video](https://drive.google.com/file/d/1wEoE_ufT7PDjSVWyd4FUSJ_dUOpQofgm/view?usp=sharing)
+
 ---
 
 ## 🚀 Features
