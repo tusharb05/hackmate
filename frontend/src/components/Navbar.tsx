@@ -21,16 +21,7 @@ const Navbar = () => {
 						</Link>
 					</div>
 
-					{/* Center - My Teams */}
-					<div className="flex-1 flex justify-center">
-						{user && (
-							<Link
-								to="/user/my-teams"
-								className="text-slate-700 font-medium hover:text-slate-900 transition-colors">
-								My Teams
-							</Link>
-						)}
-					</div>
+
 
 					{/* Right - User Info / Auth Buttons */}
 					<div className="flex items-center space-x-4">
