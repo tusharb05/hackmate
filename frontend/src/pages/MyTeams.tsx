@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthContext } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { FETCH_MY_TEAMS } from "../urls";
