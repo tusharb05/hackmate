@@ -11,6 +11,7 @@ It focuses on seamless team formation, skill matching, and real-time notificatio
 - **Team Management**: Create teams, define required skills, accept or reject join requests.
 - **Skill Matching**: Users can view team listings, compare skill requirements, and apply to join.
 - **Notifications**: Real-time notifications when members are added or requests are accepted/rejected.
+- **Profile Images**: User profile images stored in **Amazon S3** with **pre-signed URLs** for secure access.
 
 ---
 
@@ -20,6 +21,7 @@ HackMate follows a **microservices architecture** with 3 core services:
 
 1. **User Service**  
    - Handles registration, login, and skill management.  
+   - Stores profile images in **S3** and generates **pre-signed URLs** for secure delivery.  
    - Acts as the **source of truth** for users and skills.  
 
 2. **Team Service**  
@@ -146,30 +148,3 @@ HackMate is primarily a **DevOps and backend-focused project** demonstrating:
 - Production-ready deployment on AWS with secure networking.  
 
 ---
-
-
-## Sequence Diagram
-
-sequenceDiagram
-    participant U as User
-    participant API as API Gateway
-    participant US as User Service
-    participant TS as Team Service
-    participant MQ as RabbitMQ
-    participant NS as Notification Service
-
-    U->>API: POST /team/join
-    API->>TS: Forward request
-    TS->>US: Fetch user & skills (async copy from events)
-    TS-->>U: Request submitted
-
-    alt Leader accepts request
-        TS->>MQ: Publish "Join Accepted" event
-        MQ->>NS: Deliver event
-        NS->>U: Notify new member
-        NS->>Team: Notify all existing members
-    else Leader rejects request
-        TS->>MQ: Publish "Join Rejected" event
-        MQ->>NS: Deliver event
-        NS->>U: Notify rejection
-    end
