@@ -78,6 +78,7 @@ const Dashboard = () => {
 		if (user) {
 			fetchNotifications();
 		}
+		console.log(user);
 	}, [user]);
 
 	const getRoleBorderStyle = (role: string) => {
@@ -178,7 +179,8 @@ const Dashboard = () => {
 													setSelectedApp(app);
 													setShowModal(true);
 												}}
-												className="px-4 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600">
+												className="px-4 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600"
+												disabled={user === null}>
 												Request to Join
 											</button>
 										)}
