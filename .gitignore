@@ -34,3 +34,4 @@ control-ip.txt
 
 infra/ansible/terraform_outputs.json
 infra/ansible/inventory.ini
+assets/demo.mp4

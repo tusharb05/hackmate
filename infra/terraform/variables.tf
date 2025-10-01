@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name prefix for resources"
   type        = string
-  default     = "day2-infra"
+  default     = "hackmate"
 }
 
 variable "vpc_cidr" {
@@ -75,4 +75,4 @@ variable "rds_hackmate_password" {
   description = "The master password for the RDS instance"
   type        = string
   sensitive   = true
-}
+  }
