@@ -1,1 +1,2 @@
 activity commit 7
+update api gateway config 7
