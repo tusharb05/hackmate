@@ -1,2 +1,3 @@
 activity commit 12
 update rabbitmq config 5
+improve service communication 9
