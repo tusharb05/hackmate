@@ -117,7 +117,7 @@ HackMate’s strength lies in its **backend infrastructure and DevOps automation
 - **Networking**:  
   - Custom VPC with **public subnets for EC2** and **private subnet for RDS**.  
   - Bastion host used to securely access RDS databases.  
-- **Databases**: Each service uses its own database in **Amazon RDS**.  
+- **Databases**: Each service uses its own database in a singular **Amazon RDS** instance.  
 - **API Gateway**: **Amazon API Gateway (HTTP API)** proxies requests to different services.  
 - **Configuration Management**:  
   - **Ansible** pulls Docker images from Docker Hub and runs them on EC2.  
